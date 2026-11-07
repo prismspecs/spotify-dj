@@ -171,17 +171,14 @@ export const App: React.FC = () => {
     showToast(`QUEUED "${track.name}" ON DECK ${deckId === 'A' ? '1' : '2'} (#${position}).`, 'success');
   };
 
+  // DECK 1 / DECK 2 on a song: put it on the deck right away. A deck that was
+  // playing keeps playing (the new song); an idle deck cues it and waits for PLAY.
   const handleLoadTrackToDeck = async (deckId: 'A' | 'B', track: Track) => {
-    const deckName = `DECK_${deckId === 'A' ? '01' : '02'}`;
-    // Loading over a playing song would cut it off; queue it instead.
-    if (playerManager.getDeckState(deckId).isPlaying) {
-      handleQueueTrack(deckId, track);
-      return;
-    }
+    const deckName = `DECK ${deckId === 'A' ? '1' : '2'}`;
+    const wasPlaying = playerManager.getDeckState(deckId).isPlaying;
     try {
-      // Cue only; the deck waits for PLAY.
-      await playerManager.loadTrack(deckId, track, false);
-      showToast(`CUED "${track.name}" ON ${deckName}. PRESS PLAY WHEN READY.`, 'success');
+      await playerManager.loadTrack(deckId, track, wasPlaying);
+      showToast(wasPlaying ? `NOW PLAYING "${track.name}" ON ${deckName}.` : `CUED "${track.name}" ON ${deckName}. PRESS PLAY WHEN READY.`, 'success');
     } catch (err: any) {
       showToast(err?.message || `LOAD ERROR ON ${deckName}`, 'error');
     }

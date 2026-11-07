@@ -66,6 +66,32 @@ describe('deck queue', () => {
   });
 });
 
+describe('loading a song onto a deck', () => {
+  beforeEach(() => store.clear());
+
+  it('replaces a playing song and keeps the deck playing', async () => {
+    const pm = await freshManager();
+    pm.players.A = { setVolume: async () => undefined }; // a connected Spotify player
+    pm.updateDeckState('A', { token: 't', isPlaying: true, currentTrack: track('old') });
+    const stop = vi.spyOn(pm, 'stopDeck').mockImplementation(async () => pm.updateDeckState('A', { isPlaying: false }));
+    const play = vi.spyOn(pm, 'playSpotifyTrack').mockResolvedValue(undefined);
+
+    await pm.loadTrack('A', track('new'), true);
+
+    expect(stop).toHaveBeenCalled();
+    expect(play).toHaveBeenCalledWith('A', 'spotify:track:new', 0);
+    expect(pm.getDeckState('A').currentTrack.id).toBe('new');
+  });
+
+  it('refuses a Spotify song on a deck with no account, without stopping it', async () => {
+    const pm = await freshManager();
+    pm.updateDeckState('A', { token: null, isPlaying: true });
+    const stop = vi.spyOn(pm, 'stopDeck');
+    await expect(pm.loadTrack('A', track('new'), true)).rejects.toThrow('NO SPOTIFY ACCOUNT');
+    expect(stop).not.toHaveBeenCalled();
+  });
+});
+
 describe('Spotify end-of-song detection', () => {
   async function playing(positionMs: number) {
     const pm = await freshManager();

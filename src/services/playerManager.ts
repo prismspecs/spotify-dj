@@ -742,17 +742,15 @@ class PlayerManager {
   public async loadTrack(deckId: DeckId, track: Track, autoPlay = false): Promise<void> {
     const state = this.deckStates[deckId];
 
-    // Don't cut off a playing deck by loading over it by accident.
-    if (state.isPlaying) {
-      throw new Error(`DECK_${deckLabel(deckId)} IS PLAYING. PAUSE IT BEFORE LOADING A NEW TRACK.`);
+    if (track.source !== 'youtube' && !state.token) {
+      throw new Error(`DECK_${deckLabel(deckId)} HAS NO SPOTIFY ACCOUNT. LINK ONE, OR PUT A YOUTUBE TRACK ON THIS DECK.`);
     }
+
+    // Replaces whatever the deck is playing.
+    if (state.isPlaying) await this.stopDeck(deckId);
 
     if (track.source === 'youtube') {
       return this.loadYouTubeTrack(deckId, track, autoPlay);
-    }
-
-    if (!state.token) {
-      throw new Error(`DECK_${deckLabel(deckId)} HAS NO SPOTIFY ACCOUNT. LINK ONE, OR PUT A YOUTUBE TRACK ON THIS DECK.`);
     }
 
     this.updateDeckState(deckId, {
