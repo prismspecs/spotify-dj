@@ -3,12 +3,12 @@ import { Navbar } from './components/Navbar';
 import { Deck } from './components/Deck';
 import { MixerStrip } from './components/MixerStrip';
 import { PlaylistManager } from './components/PlaylistManager';
-import { SettingsModal } from './components/SettingsModal';
-import { AuthModal } from './components/AuthModal';
+import { SetupModal } from './components/SetupModal';
 import { playerManager } from './services/playerManager';
 import {
   handleAuthCallback,
   getValidToken,
+  getStoredClientId,
   clearStoredToken,
   fetchUserProfile,
   SpotifyRequestError,
@@ -21,8 +21,8 @@ export const App: React.FC = () => {
   const [crossfadePos, setCrossfadePos] = useState<number>(0.5);
   const [crossfadeCurve, setCrossfadeCurve] = useState<CrossfadeCurve>('constant-power');
 
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [authModalDeck, setAuthModalDeck] = useState<'A' | 'B' | null>(null);
+  // Opens by itself on a first visit, when there's no Spotify app set up yet.
+  const [isSetupOpen, setIsSetupOpen] = useState(() => !getStoredClientId());
   const [toast, setToast] = useState<{ text: string; type: 'info' | 'success' | 'error' } | null>(null);
 
   const showToast = (text: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -64,15 +64,16 @@ export const App: React.FC = () => {
           playerManager.disconnectDeck(deckId);
           playerManager.updateDeckState(deckId, {
             status: 'ERROR',
+            authProblem: e.status === 403 ? 'not-allowed' : 'login-invalid',
             errorMessage: e.status === 403
-              ? `SPOTIFY REFUSED THIS ACCOUNT ("${e.message}"). ADD IT UNDER USER MANAGEMENT IN YOUR SPOTIFY APP'S DASHBOARD (SETTINGS HAS THE LINK), THEN PRESS RETRY.`
-              : 'THIS SPOTIFY LOGIN IS NO LONGER VALID. CLICK UNLINK, THEN LINK THE ACCOUNT AGAIN.'
+              ? 'SPOTIFY HASN\'T ALLOWED THIS ACCOUNT ON YOUR APP YET. OPEN SETUP AND DO STEP 2 ("ALLOW YOUR SECOND ACCOUNT"), THEN PRESS RETRY.'
+              : 'THIS SPOTIFY LOGIN STOPPED WORKING. OPEN SETUP, UNLINK THIS DECK, AND LOG IN AGAIN.'
           });
           return;
         }
         // Network trouble or rate limiting: carry on without the name.
       }
-      if (user) playerManager.updateDeckState(deckId, { user });
+      playerManager.updateDeckState(deckId, user ? { user, authProblem: null } : { authProblem: null });
 
       // Both decks on one account can't work: Spotify allows one stream per
       // account, so starting one deck would stop the other.
@@ -126,7 +127,8 @@ export const App: React.FC = () => {
       isReady: false,
       status: 'IDLE',
       isPlaying: false,
-      errorMessage: null
+      errorMessage: null,
+      authProblem: null
     });
     showToast(`DECK_${deckId === 'A' ? '01' : '02'} DISCONNECTED`, 'info');
   };
@@ -159,8 +161,23 @@ export const App: React.FC = () => {
     await playerManager.animateCrossfade(target, durationMs, setCrossfadePos);
   };
 
+  // "+" next to a song: queue it on the deck, or cue it if the deck is empty.
+  const handleQueueTrack = (deckId: 'A' | 'B', track: Track) => {
+    if (!playerManager.getDeckState(deckId).currentTrack) {
+      handleLoadTrackToDeck(deckId, track);
+      return;
+    }
+    const position = playerManager.enqueue(deckId, track);
+    showToast(`QUEUED "${track.name}" ON DECK ${deckId === 'A' ? '1' : '2'} (#${position}).`, 'success');
+  };
+
   const handleLoadTrackToDeck = async (deckId: 'A' | 'B', track: Track) => {
     const deckName = `DECK_${deckId === 'A' ? '01' : '02'}`;
+    // Loading over a playing song would cut it off; queue it instead.
+    if (playerManager.getDeckState(deckId).isPlaying) {
+      handleQueueTrack(deckId, track);
+      return;
+    }
     try {
       // Cue only; the deck waits for PLAY.
       await playerManager.loadTrack(deckId, track, false);
@@ -188,7 +205,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Top Navigation */}
-      <Navbar onOpenSettings={() => setIsSettingsOpen(true)} />
+      <Navbar onOpenSetup={() => setIsSetupOpen(true)} />
 
       {/* Main Console Workspace */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-2.5 sm:p-4 space-y-3">
@@ -201,7 +218,7 @@ export const App: React.FC = () => {
               state={deckAState}
               onTogglePlay={() => playerManager.togglePlay('A')}
               onSeek={(pos) => playerManager.seek('A', pos)}
-              onConnect={() => setAuthModalDeck('A')}
+              onConnect={() => setIsSetupOpen(true)}
               onDisconnect={() => handleDisconnect('A')}
               onRetry={() => handleRetry('A')}
             />
@@ -229,7 +246,7 @@ export const App: React.FC = () => {
               state={deckBState}
               onTogglePlay={() => playerManager.togglePlay('B')}
               onSeek={(pos) => playerManager.seek('B', pos)}
-              onConnect={() => setAuthModalDeck('B')}
+              onConnect={() => setIsSetupOpen(true)}
               onDisconnect={() => handleDisconnect('B')}
               onRetry={() => handleRetry('B')}
             />
@@ -241,33 +258,24 @@ export const App: React.FC = () => {
           tokenA={deckAState.token}
           tokenB={deckBState.token}
           onLoadTrackToDeck={handleLoadTrackToDeck}
-          onConnectDeck={(d) => setAuthModalDeck(d)}
+          onQueueTrack={handleQueueTrack}
+          onConnectDeck={() => setIsSetupOpen(true)}
           currentTrackA={deckAState.currentTrack}
           currentTrackB={deckBState.currentTrack}
         />
       </main>
 
       {/* Modals */}
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        onTokensUpdated={() => {
+      <SetupModal
+        isOpen={isSetupOpen}
+        onClose={() => setIsSetupOpen(false)}
+        deckA={deckAState}
+        deckB={deckBState}
+        onConfigChanged={() => {
           initDeckAuth('A');
           initDeckAuth('B');
         }}
-      />
-
-      <AuthModal
-        isOpen={authModalDeck !== null}
-        deckId={authModalDeck}
-        onClose={() => setAuthModalDeck(null)}
-        onSuccess={() => {
-          if (authModalDeck) initDeckAuth(authModalDeck);
-        }}
-        onOpenSettings={() => {
-          setAuthModalDeck(null);
-          setIsSettingsOpen(true);
-        }}
+        onUnlink={handleDisconnect}
       />
     </div>
   );

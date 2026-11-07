@@ -26,6 +26,18 @@ const CONNECT_TIMEOUT_MS = 25_000;
 
 const deckLabel = (deckId: DeckId) => (deckId === 'A' ? '01' : '02');
 
+// Queues survive a page reload.
+const queueKey = (deckId: DeckId) => `spotify_dj_queue_${deckId.toLowerCase()}`;
+
+function loadSavedQueue(deckId: DeckId): Track[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(queueKey(deckId)) || '[]');
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
 /**
  * True if the browser can't reach Spotify's server lookup, which the player
  * needs before it can connect. That endpoint allows any origin, so a network
@@ -54,7 +66,8 @@ function initialDeckState(deckId: DeckId): DeckState {
     deviceId: null,
     token: null,
     status: 'IDLE',
-    errorMessage: null
+    errorMessage: null,
+    queue: loadSavedQueue(deckId)
   };
 }
 
@@ -66,6 +79,10 @@ class PlayerManager {
   private deviceIds: Record<DeckId, string | null> = { A: null, B: null };
   // URIs of the track the Spotify player currently holds (incl. relinked versions).
   private loadedUris: Record<DeckId, string[]> = { A: [], B: [] };
+  // The Spotify track this deck was last told to play, and whether its end
+  // has been handled, so the queue advances once per song.
+  private startedUris: Record<DeckId, string[]> = { A: [], B: [] };
+  private endHandled: Record<DeckId, boolean> = { A: false, B: false };
 
   // YouTube: one embedded player per deck, created on first use. Each lives in a
   // persistent container that the Deck component shows while the deck plays YouTube.
@@ -333,6 +350,13 @@ class PlayerManager {
       }
 
       const sdkTrack = sdkState.track_window?.current_track;
+      if (this.spotifyTrackEnded(deckId, sdkState)) {
+        this.endHandled[deckId] = true;
+        this.updateDeckState(deckId, { isPlaying: false, status: 'PAUSED', position_ms: 0 });
+        this.trackPositionLoop(deckId, false);
+        this.onTrackEnded(deckId);
+        return;
+      }
       this.loadedUris[deckId] = [sdkTrack?.uri, sdkTrack?.linked_from?.uri].filter(Boolean);
       const isPlaying = !sdkState.paused;
       const cued = this.deckStates[deckId].currentTrack;
@@ -503,6 +527,7 @@ class PlayerManager {
     } else if (state === YT_PAUSED || state === YT_ENDED) {
       this.updateDeckState(deckId, { isPlaying: false, status: 'PAUSED', ...withDuration });
       this.trackPositionLoop(deckId, false);
+      if (state === YT_ENDED) this.onTrackEnded(deckId);
     } else if (state === YT_CUED) {
       this.updateDeckState(deckId, { isPlaying: false, status: 'READY', isReady: true, ...withDuration });
     }
@@ -529,15 +554,116 @@ class PlayerManager {
     try {
       const player = await this.ensureYouTubePlayer(deckId);
       if (this.deckStates[deckId].currentTrack !== track) return; // replaced meanwhile
-      player.cueVideoById(track.youtubeId);
       player.setVolume(Math.round(this.deckStates[deckId].effectiveVolume * 100));
-      this.updateDeckState(deckId, { status: 'READY', isReady: true });
-      if (autoPlay) player.playVideo();
+      if (autoPlay) {
+        // One call: a cue followed by play can lose the play to the late "cued" event.
+        player.loadVideoById(track.youtubeId);
+      } else {
+        player.cueVideoById(track.youtubeId);
+        this.updateDeckState(deckId, { status: 'READY', isReady: true });
+      }
     } catch (err: any) {
       const message = err?.message || 'YOUTUBE PLAYER FAILED';
       this.updateDeckState(deckId, { status: 'ERROR', errorMessage: message });
       throw new Error(message);
     }
+  }
+
+  // ------------------------------------------------------------------ Queue
+
+  public enqueue(deckId: DeckId, track: Track): number {
+    const queue = [...this.deckStates[deckId].queue, track];
+    this.setQueue(deckId, queue);
+    console.log(`[Deck ${deckId}] queued "${track.name}" (#${queue.length})`);
+    return queue.length;
+  }
+
+  public removeFromQueue(deckId: DeckId, index: number): void {
+    this.setQueue(deckId, this.deckStates[deckId].queue.filter((_, i) => i !== index));
+  }
+
+  /** Moves a queued song one place earlier. */
+  public moveUpInQueue(deckId: DeckId, index: number): void {
+    if (index <= 0) return;
+    const queue = [...this.deckStates[deckId].queue];
+    [queue[index - 1], queue[index]] = [queue[index], queue[index - 1]];
+    this.setQueue(deckId, queue);
+  }
+
+  public clearQueue(deckId: DeckId): void {
+    this.setQueue(deckId, []);
+  }
+
+  private setQueue(deckId: DeckId, queue: Track[]): void {
+    this.updateDeckState(deckId, { queue });
+    try {
+      localStorage.setItem(queueKey(deckId), JSON.stringify(queue));
+    } catch {
+      // storage full or blocked: the queue still works until reload
+    }
+  }
+
+  /** Starts the next queued song right away (the deck's Next button). */
+  public async playNext(deckId: DeckId): Promise<void> {
+    const [next, ...rest] = this.deckStates[deckId].queue;
+    if (!next) return;
+    // Unlock browser audio while still inside the click.
+    void this.players[deckId]?.activateElement?.();
+    if (this.deckStates[deckId].isPlaying) await this.stopDeck(deckId);
+    this.setQueue(deckId, rest);
+    console.log(`[Deck ${deckId}] Next: starting "${next.name}"`);
+    try {
+      await this.loadTrack(deckId, next, true);
+    } catch (e: any) {
+      console.error(`[Deck ${deckId}] could not start the next song:`, e?.message);
+    }
+  }
+
+  /** Pauses whichever player the deck is using. */
+  private async stopDeck(deckId: DeckId): Promise<void> {
+    if (this.isYouTubeDeck(deckId)) this.ytPlayers[deckId]?.pauseVideo();
+    else await this.players[deckId]?.pause().catch(() => undefined);
+    this.updateDeckState(deckId, { isPlaying: false, status: 'PAUSED' });
+    this.trackPositionLoop(deckId, false);
+  }
+
+  /** A song finished on its own: play the next queued one, if any. */
+  private onTrackEnded(deckId: DeckId): void {
+    const queue = this.deckStates[deckId].queue;
+    console.log(`[Deck ${deckId}] song ended; ${queue.length} in queue`);
+    if (queue.length === 0) {
+      // Spotify may carry on with its own "autoplay" picks; a deck plays only what was chosen.
+      if (!this.isYouTubeDeck(deckId)) void this.players[deckId]?.pause().catch(() => undefined);
+      return;
+    }
+    void this.playNext(deckId);
+  }
+
+  /**
+   * Spotify's player has no "ended" event. A song we started has ended when the
+   * player stops at 0:00 right after playing it to the end, or has moved on to
+   * a song we didn't start (Spotify's autoplay).
+   */
+  private spotifyTrackEnded(deckId: DeckId, sdkState: any): boolean {
+    const started = this.startedUris[deckId];
+    if (this.endHandled[deckId] || started.length === 0 || !this.deckStates[deckId].isPlaying) return false;
+    const current = sdkState.track_window?.current_track;
+    const isStarted = (t: any) => !!t && (started.includes(t.uri) || started.includes(t.linked_from?.uri));
+    const previous: any[] = sdkState.track_window?.previous_tracks || [];
+
+    if (!sdkState.paused && current && !isStarted(current) && previous.some(isStarted)) return true;
+
+    if (!sdkState.paused || !isStarted(current)) return false;
+    // Stopped on the last second.
+    if (sdkState.duration > 0 && sdkState.position >= sdkState.duration - 1000) return true;
+    if (sdkState.position === 0) {
+      const { position_ms, duration_ms } = this.deckStates[deckId];
+      const wasNearEnd = duration_ms > 0 && position_ms > duration_ms - 5000;
+      const inPrevious = previous.some(isStarted);
+      const notResumable = (sdkState.restrictions?.disallow_resuming_reasons || []).includes('not_paused');
+      return wasNearEnd || inPrevious || notResumable;
+    }
+    return false;
   }
 
   private isLoadedInPlayer(deckId: DeckId, track: Track): boolean {
@@ -597,6 +723,8 @@ class PlayerManager {
       }
 
       console.log(`[Deck ${deckId}] asking Spotify to play ${trackUri} at ${Math.round(positionMs / 1000)}s on device ${deviceId}`);
+      this.startedUris[deckId] = [trackUri];
+      this.endHandled[deckId] = false;
       await triggerPlayback(token, deviceId, trackUri, positionMs);
       console.log(`[Deck ${deckId}] Spotify accepted the play request`);
       this.updateDeckState(deckId, { isPlaying: true, status: 'PLAYING', errorMessage: null });

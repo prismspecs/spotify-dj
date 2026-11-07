@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, LogIn, Music } from 'lucide-react';
+import { Play, Pause, RotateCcw, LogIn, Music, ChevronUp, X, SkipForward } from 'lucide-react';
 import { DeckState } from '../types';
 import { formatDuration } from '../services/spotifyApi';
 import { playerManager } from '../services/playerManager';
@@ -172,6 +172,58 @@ export const Deck: React.FC<DeckProps> = ({
           {state.isPlaying ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
           <span>{state.isPlaying ? 'PAUSE' : 'PLAY'}</span>
         </button>
+      </div>
+
+      {/* Queue: plays in order when the current song ends */}
+      <div className="border-t border-zinc-800 pt-2 space-y-1.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="text-zinc-300 font-bold">
+            Up next{state.queue.length > 0 && <span className="text-zinc-500 font-normal"> ({state.queue.length})</span>}
+          </span>
+          {state.queue.length > 0 && (
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => playerManager.playNext(deckId)}
+                className="flex items-center gap-1 text-zinc-300 hover:text-white"
+                title="Stop this song and start the next one now"
+              >
+                <SkipForward className="w-3 h-3" />
+                <span>Next</span>
+              </button>
+              <button onClick={() => playerManager.clearQueue(deckId)} className="text-zinc-600 hover:text-red-400">
+                clear
+              </button>
+            </div>
+          )}
+        </div>
+        {state.queue.length === 0 ? (
+          <p className="text-[10px] text-zinc-600 leading-relaxed">
+            Nothing queued. Press <b className="text-zinc-400">+</b> next to a song's DECK {isA ? '1' : '2'} button; queued songs play one after another.
+          </p>
+        ) : (
+          <ol className="max-h-36 overflow-y-auto space-y-0.5">
+            {state.queue.map((t, i) => (
+              <li key={`${t.id}-${i}`} className="flex items-center gap-2 text-[11px]">
+                <span className="w-4 text-right text-zinc-600">{i + 1}</span>
+                <span className="flex-1 min-w-0 truncate text-zinc-300">
+                  {t.source === 'youtube' && <span className="text-red-400 font-bold">YT </span>}
+                  {t.name} <span className="text-zinc-600">· {t.artists.join(', ')}</span>
+                </span>
+                <button
+                  onClick={() => playerManager.moveUpInQueue(deckId, i)}
+                  disabled={i === 0}
+                  className="text-zinc-500 hover:text-white disabled:opacity-20"
+                  title="Move up"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => playerManager.removeFromQueue(deckId, i)} className="text-zinc-500 hover:text-red-400" title="Remove">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </li>
+            ))}
+          </ol>
+        )}
       </div>
     </div>
   );

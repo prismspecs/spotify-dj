@@ -33,6 +33,12 @@ export interface DeckState {
   bpm?: number;
   status?: 'IDLE' | 'CONNECTING' | 'READY' | 'PLAYING' | 'PAUSED' | 'ERROR';
   errorMessage?: string | null;
+  // Spotify refused this deck's account: not on the app's User Management list,
+  // or the saved login stopped working. Shown in Setup.
+  authProblem?: 'not-allowed' | 'login-invalid' | null;
+  // Songs waiting to play on this deck, in order. When the current song
+  // ends, the first one starts automatically.
+  queue: Track[];
 }
 
 export type CrossfadeCurve = 'constant-power' | 'linear' | 'cut';

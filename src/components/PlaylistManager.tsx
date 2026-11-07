@@ -44,6 +44,7 @@ interface PlaylistManagerProps {
   tokenA: string | null;
   tokenB: string | null;
   onLoadTrackToDeck: (deckId: 'A' | 'B', track: Track) => void;
+  onQueueTrack: (deckId: 'A' | 'B', track: Track) => void;
   onConnectDeck?: (deckId: 'A' | 'B') => void;
   currentTrackA: Track | null;
   currentTrackB: Track | null;
@@ -104,7 +105,8 @@ const TrackTable: React.FC<{
   currentTrackA: Track | null;
   currentTrackB: Track | null;
   onLoad: (deckId: 'A' | 'B', track: Track) => void;
-}> = ({ tracks, emptyText, currentTrackA, currentTrackB, onLoad }) => {
+  onQueue: (deckId: 'A' | 'B', track: Track) => void;
+}> = ({ tracks, emptyText, currentTrackA, currentTrackB, onLoad, onQueue }) => {
   if (tracks.length === 0) {
     return <p className="p-6 text-center text-xs text-zinc-600">{emptyText}</p>;
   }
@@ -152,10 +154,24 @@ const TrackTable: React.FC<{
                       DECK 1
                     </button>
                     <button
+                      onClick={() => onQueue('A', track)}
+                      title="Add to Deck 1's queue"
+                      className="px-1.5 py-1 text-[10px] font-bold border bg-black text-cyan-400 border-zinc-800 hover:border-cyan-700"
+                    >
+                      +
+                    </button>
+                    <button
                       onClick={() => onLoad('B', track)}
                       className={`px-2 py-1 text-[9px] font-bold border whitespace-nowrap ${onB ? 'bg-amber-950 text-amber-300 border-amber-500' : 'bg-black text-amber-400 border-zinc-800 hover:border-amber-700'}`}
                     >
                       DECK 2
+                    </button>
+                    <button
+                      onClick={() => onQueue('B', track)}
+                      title="Add to Deck 2's queue"
+                      className="px-1.5 py-1 text-[10px] font-bold border bg-black text-amber-400 border-zinc-800 hover:border-amber-700"
+                    >
+                      +
                     </button>
                   </div>
                 </td>
@@ -175,6 +191,7 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
   tokenA,
   tokenB,
   onLoadTrackToDeck,
+  onQueueTrack,
   onConnectDeck,
   currentTrackA,
   currentTrackB
@@ -329,6 +346,7 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
           currentTrackA={currentTrackA}
           currentTrackB={currentTrackB}
           onLoad={onLoadTrackToDeck}
+          onQueue={onQueueTrack}
         />
       </div>
 
@@ -378,6 +396,7 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
           currentTrackA={currentTrackA}
           currentTrackB={currentTrackB}
           onLoad={onLoadTrackToDeck}
+          onQueue={onQueueTrack}
         />
       </div>
     </div>
