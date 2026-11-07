@@ -28,6 +28,7 @@ interface DeckProps {
   onSeek: (positionMs: number) => void;
   onConnect: () => void;
   onDisconnect: () => void;
+  onRetry: () => void;
 }
 
 function statusText(state: DeckState): { text: string; color: string } {
@@ -49,7 +50,8 @@ export const Deck: React.FC<DeckProps> = ({
   onTogglePlay,
   onSeek,
   onConnect,
-  onDisconnect
+  onDisconnect,
+  onRetry
 }) => {
   const isA = deckId === 'A';
   const progressRef = useRef<HTMLDivElement>(null);
@@ -77,10 +79,10 @@ export const Deck: React.FC<DeckProps> = ({
       {/* Header: deck name + Spotify account */}
       <div className="flex items-center justify-between">
         <span className={`text-sm font-bold ${accentText}`}>DECK {isA ? '1' : '2'}</span>
-        {state.user ? (
+        {state.user || state.token ? (
           <div className="flex items-center gap-2 text-[11px]">
             <span className="w-1.5 h-1.5 bg-emerald-500" />
-            <span className="text-zinc-300 max-w-[110px] truncate">{state.user.display_name}</span>
+            <span className="text-zinc-300 max-w-[110px] truncate">{state.user?.display_name ?? 'Spotify linked'}</span>
             <button onClick={onDisconnect} className="text-zinc-600 hover:text-red-400" title="Disconnect this Spotify account">
               unlink
             </button>
@@ -124,7 +126,7 @@ export const Deck: React.FC<DeckProps> = ({
       {state.errorMessage && (
         <div className="bg-red-950/60 border border-red-800 text-red-300 text-[11px] p-2 flex items-center justify-between gap-2">
           <span>{state.errorMessage}</span>
-          <button onClick={onTogglePlay} className="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-white text-[10px] flex-shrink-0">
+          <button onClick={onRetry} className="px-2 py-0.5 bg-red-900 hover:bg-red-800 text-white text-[10px] flex-shrink-0">
             Retry
           </button>
         </div>

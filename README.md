@@ -130,6 +130,10 @@ The repo includes a Render Blueprint (`render.yaml`): one Node web service that 
 
 The free plan sleeps after 15 minutes without requests, so the first load or search after a quiet spell takes about a minute. Music keeps playing meanwhile; it runs in the browser.
 
+### Debug log
+
+To see what the decks are doing in a visitor's browser, set `DEBUG_LOG_KEY` (any long random string) in the service's environment. Browsers then send their console output to the server, which keeps the last 5000 lines in memory and prints them to Render's Logs tab. Read them at `https://<your-service>.onrender.com/api/log?key=<DEBUG_LOG_KEY>` (add `&tail=200` for the end only). Long token-like strings are blanked out before sending. Under `npm run dev` the same log goes to `.devlog/console.log`.
+
 ## Architecture & Under the Hood
 
 ```
@@ -159,7 +163,7 @@ The free plan sleeps after 15 minutes without requests, so the first load or sea
 ```
 
 ### Key Modules:
-- [`src/services/playerManager.ts`](src/services/playerManager.ts): Singleton coordinating dual `Spotify.Player` instances, browser autoplay activation (`activateElement()`), volume throttling, and position sync loops.
+- [`src/services/playerManager.ts`](src/services/playerManager.ts): Singleton coordinating dual `Spotify.Player` instances, browser autoplay activation (`activateElement()`), volume throttling, and position sync loops. Each deck's player runs in its own hidden frame ([`public/spotify-deck.html`](public/spotify-deck.html)): Spotify's player script supports one account per page, and a second player on the same page takes over the first one's login.
 - [`src/services/spotifyAuth.ts`](src/services/spotifyAuth.ts): Client-side PKCE OAuth implementation, code verifier exchange, token storage, and background refresh.
 - [`src/services/spotifyApi.ts`](src/services/spotifyApi.ts): Robust Spotify API wrapper with automatic token refresh, rate-limit backoff (503/429), playlist & album pagination, and Spotify Connect device transfer.
 - [`src/utils/audioMath.ts`](src/utils/audioMath.ts): Audio math calculations for Constant Power (`cos`/`sin`), Linear, and Scratch Cut gain curves.

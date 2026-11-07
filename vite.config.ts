@@ -19,7 +19,7 @@ function youtubeSearchApi(): Plugin {
   };
 }
 
-// Dev only: the browser forwards its console here (see src/devLog.ts) and it is
+// Dev only: the browser forwards its console here (see src/debugLog.ts) and it is
 // appended to .devlog/console.log, so errors from any browser can be read from disk.
 function devConsoleLog(): Plugin {
   const file = path.resolve(__dirname, '.devlog/console.log');
@@ -28,7 +28,8 @@ function devConsoleLog(): Plugin {
     apply: 'serve',
     configureServer(server) {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      server.middlewares.use('/__devlog', (req, res) => {
+      server.middlewares.use('/api/log', (req, res, next) => {
+        if (req.method !== 'POST') return next();
         let body = '';
         req.on('data', (chunk) => (body += chunk));
         req.on('end', () => {

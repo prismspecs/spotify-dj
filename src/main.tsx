@@ -2,11 +2,12 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './index.css';
-import { installDevLog } from './devLog';
+import { installDebugLog } from './debugLog';
 import { getStoredClientId, setStoredClientId } from './services/spotifyAuth';
 
+installDebugLog();
+
 if (import.meta.env.DEV) {
-  installDevLog();
   // Handy for poking at decks from the browser console.
   import('./services/playerManager').then(m => ((window as any).__playerManager = m.playerManager));
 }

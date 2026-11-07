@@ -284,22 +284,33 @@ export async function handleAuthCallback(): Promise<{ deckId: 'A' | 'B'; token: 
   return { deckId, token };
 }
 
-export async function fetchUserProfile(token: string): Promise<SpotifyUser | null> {
-  try {
-    const res = await fetch('https://api.spotify.com/v1/me', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (!res.ok) {
-      // e.g. 403 when the account isn't on the app's User Management allowlist
-      const err = await res.json().catch(() => ({}));
-      console.warn(`GET /me failed: HTTP ${res.status} ${err?.error?.message ?? ''}`);
-      return null;
-    }
-    const user = await res.json();
-    console.log(`GET /me ok: ${user.display_name} (${user.id})`);
-    return user;
-  } catch (e) {
-    console.error('Error fetching user profile:', e);
-    return null;
+/** A failed Spotify Web API request, with Spotify's HTTP status and reason. */
+export class SpotifyRequestError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+    this.name = 'SpotifyRequestError';
   }
+}
+
+/** GET /me. Throws SpotifyRequestError when Spotify refuses. */
+export async function fetchUserProfile(token: string, deckId: 'A' | 'B'): Promise<SpotifyUser> {
+  const res = await fetch('https://api.spotify.com/v1/me', {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (!res.ok) {
+    // e.g. 403 when the account isn't on the app's User Management list
+    const body = await res.text().catch(() => '');
+    let reason = body;
+    try {
+      reason = JSON.parse(body)?.error?.message || body;
+    } catch {
+      // not JSON; keep the raw text
+    }
+    reason = reason.trim().slice(0, 200) || `HTTP ${res.status}`;
+    console.warn(`[Deck ${deckId}] GET /me failed: HTTP ${res.status} ${reason}`);
+    throw new SpotifyRequestError(res.status, reason);
+  }
+  const user = await res.json();
+  console.log(`[Deck ${deckId}] GET /me ok: ${user.display_name} (${user.id})`);
+  return user;
 }

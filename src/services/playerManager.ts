@@ -11,16 +11,6 @@ const YT_PLAYING = 1;
 const YT_PAUSED = 2;
 const YT_CUED = 5;
 
-// Extend window for Spotify Web Playback SDK
-declare global {
-  interface Window {
-    onSpotifyWebPlaybackSDKReady?: () => void;
-    __spotifySdkReadyCallbacks?: (() => void)[];
-    __spotifySdkLoaded?: boolean;
-    Spotify?: any;
-  }
-}
-
 type DeckId = 'A' | 'B';
 
 export type PlayerStateCallback = (deck: DeckId, state: Partial<DeckState>) => void;
@@ -29,6 +19,10 @@ export type PlayerStateCallback = (deck: DeckId, state: Partial<DeckState>) => v
 const VOLUME_UPDATE_MS = 50;
 // How long to wait for a deck's browser player to register with Spotify.
 const DEVICE_WAIT_MS = 10_000;
+// How long a deck's copy of Spotify's player script may take to load.
+const SDK_LOAD_MS = 20_000;
+// A Spotify deck still connecting after this long is shown as an error.
+const CONNECT_TIMEOUT_MS = 25_000;
 
 const deckLabel = (deckId: DeckId) => (deckId === 'A' ? '01' : '02');
 
@@ -89,7 +83,11 @@ class PlayerManager {
 
   private stateListeners: Set<PlayerStateCallback> = new Set();
   private positionIntervals: Partial<Record<DeckId, number>> = {};
-  private sdkLoadPromise: Promise<void> | null = null;
+
+  // Each deck's Spotify player runs in its own hidden frame (public/spotify-deck.html).
+  // Spotify's script handles one account per page: two players on one page
+  // end up sharing one login, and neither deck connects.
+  private sdkFrames: Partial<Record<DeckId, HTMLIFrameElement>> = {};
 
   private sendVolume: Record<DeckId, (v: number) => void> = {
     A: createLatestThrottle((v: number) => this.setPlayerVolume('A', v), VOLUME_UPDATE_MS),
@@ -106,6 +104,13 @@ class PlayerManager {
   }
 
   public updateDeckState(deckId: DeckId, partial: Partial<DeckState>) {
+    const prev = this.deckStates[deckId];
+    if (partial.status && partial.status !== prev.status) {
+      console.log(`[Deck ${deckId}] status ${prev.status} -> ${partial.status}`);
+    }
+    if (partial.errorMessage && partial.errorMessage !== prev.errorMessage) {
+      console.warn(`[Deck ${deckId}] error shown: ${partial.errorMessage}`);
+    }
     this.deckStates[deckId] = {
       ...this.deckStates[deckId],
       ...partial
@@ -117,41 +122,60 @@ class PlayerManager {
     return this.deckStates[deckId];
   }
 
-  private ensureSdkReady(): Promise<void> {
-    if (window.Spotify && window.Spotify.Player) {
-      return Promise.resolve();
-    }
-    if (this.sdkLoadPromise) {
-      return this.sdkLoadPromise;
-    }
+  /** Adds a hidden frame that loads its own copy of Spotify's player script. */
+  private createDeckFrame(deckId: DeckId): HTMLIFrameElement {
+    const frame = document.createElement('iframe');
+    frame.src = '/spotify-deck.html';
+    frame.title = `Spotify player for deck ${deckLabel(deckId)}`;
+    frame.allow = 'autoplay; encrypted-media';
+    frame.tabIndex = -1;
+    frame.setAttribute('aria-hidden', 'true');
+    // Same hiding as Spotify's own player frame (display:none can stop playback).
+    Object.assign(frame.style, { position: 'absolute', left: '-1px', top: '0', width: '0', height: '0', border: 'none' });
+    this.sdkFrames[deckId] = frame;
+    document.body.appendChild(frame);
+    return frame;
+  }
 
-    this.sdkLoadPromise = new Promise((resolve) => {
-      if (window.__spotifySdkReadyCallbacks) {
-        window.__spotifySdkReadyCallbacks.push(() => {
-          if (window.Spotify && window.Spotify.Player) resolve();
-        });
-      }
-
-      const prev = window.onSpotifyWebPlaybackSDKReady;
-      window.onSpotifyWebPlaybackSDKReady = () => {
-        if (prev) {
-          try { prev(); } catch (e) { console.warn(e); }
-        }
-        resolve();
+  /** Resolves with the frame's Spotify object once its player script is ready. */
+  private waitForFrameSdk(frame: HTMLIFrameElement): Promise<any> {
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(
+        () => reject(new Error('SPOTIFY PLAYER SCRIPT DID NOT LOAD IN TIME (blocked by an extension or the network?)')),
+        SDK_LOAD_MS
+      );
+      const fail = (message: string) => {
+        window.clearTimeout(timeout);
+        reject(new Error(message));
       };
-
-      // Poll as fallback up to 6 seconds
-      let elapsed = 0;
-      const interval = window.setInterval(() => {
-        elapsed += 100;
-        if ((window.Spotify && window.Spotify.Player) || elapsed >= 6000) {
-          window.clearInterval(interval);
-          resolve();
+      frame.addEventListener('load', () => {
+        const win = frame.contentWindow as any;
+        if (!win?.spotifyReady) {
+          fail('DECK PLAYER PAGE FAILED TO LOAD');
+          return;
         }
-      }, 100);
+        win.spotifyReady.then(
+          (Spotify: any) => {
+            window.clearTimeout(timeout);
+            resolve(Spotify);
+          },
+          () => fail('SPOTIFY PLAYER SCRIPT WAS BLOCKED (ad/tracker blocker?)')
+        );
+      }, { once: true });
     });
+  }
 
-    return this.sdkLoadPromise;
+  private removeDeckFrame(deckId: DeckId): void {
+    const frame = this.sdkFrames[deckId];
+    delete this.sdkFrames[deckId];
+    // Short delay so the player's disconnect message reaches Spotify first.
+    if (frame) window.setTimeout(() => frame.remove(), 1000);
+  }
+
+  /** True if this deck has a Spotify login but no connected Spotify player. */
+  public needsSpotifyReconnect(deckId: DeckId): boolean {
+    const state = this.deckStates[deckId];
+    return !this.isYouTubeDeck(deckId) && !!state.token && !this.deviceIds[deckId];
   }
 
   /**
@@ -160,33 +184,45 @@ class PlayerManager {
    * relinked to another account and gets a fresh player.
    */
   public async initSpotifyPlayer(deckId: DeckId, ownerId: string | null = null): Promise<void> {
-    await this.ensureSdkReady();
-
-    if (!window.Spotify || !window.Spotify.Player) {
-      this.updateDeckState(deckId, {
-        errorMessage: 'SPOTIFY SDK BLOCKED OR NOT LOADED (Check shields/adblocker)',
-        status: 'ERROR'
-      });
-      return;
-    }
-
-    // Everything from here to player.connect() runs without awaiting, so two
-    // overlapping calls (e.g. React StrictMode's double effect) can't both
-    // create a player. Before this fix, each deck could end up with 2-3 live
-    // players, and audio could come out of one the faders weren't controlling.
-    const existing = this.players[deckId];
+    // No await before the setup promise is stored, so overlapping calls
+    // (e.g. React StrictMode's double effect) share one player per deck.
+    const pending = this.connectPromises[deckId];
     const owner = this.playerOwners[deckId];
-    if (existing && (!ownerId || !owner || owner === ownerId)) {
+    if (pending && (!ownerId || !owner || owner === ownerId)) {
       if (ownerId) this.playerOwners[deckId] = ownerId;
-      await this.connectPromises[deckId];
+      await pending;
       return;
     }
-    if (existing) this.disconnectDeck(deckId);
+    if (pending || this.players[deckId] || this.sdkFrames[deckId]) this.disconnectDeck(deckId);
 
+    this.playerOwners[deckId] = ownerId;
+    const setup = this.createSpotifyPlayer(deckId);
+    this.connectPromises[deckId] = setup;
+    await setup;
+  }
+
+  private async createSpotifyPlayer(deckId: DeckId): Promise<boolean> {
     this.updateDeckState(deckId, { status: 'CONNECTING', errorMessage: null });
-    if (import.meta.env.DEV) void this.probePlayerAuth(deckId);
+    void this.probePlayerAuth(deckId);
 
-    const player = new window.Spotify.Player({
+    const frame = this.createDeckFrame(deckId);
+    const frameIsCurrent = () => this.sdkFrames[deckId] === frame;
+    console.log(`[Deck ${deckId}] loading Spotify player script in its own frame`);
+
+    let Spotify: any;
+    try {
+      Spotify = await this.waitForFrameSdk(frame);
+    } catch (e: any) {
+      if (frameIsCurrent()) {
+        console.error(`[Deck ${deckId}] ${e.message}`);
+        this.updateDeckState(deckId, { isReady: false, status: 'ERROR', errorMessage: e.message });
+      }
+      return false;
+    }
+    if (!frameIsCurrent()) return false; // deck was unlinked or relinked meanwhile
+    console.log(`[Deck ${deckId}] Spotify player script ready`);
+
+    const player = new Spotify.Player({
       name: `Spotify DJ - Deck ${deckLabel(deckId)}`,
       getOAuthToken: (cb: (t: string) => void) => {
         getValidToken(deckId).then(t => {
@@ -197,7 +233,6 @@ class PlayerManager {
       volume: this.deckStates[deckId].effectiveVolume
     });
     this.players[deckId] = player;
-    this.playerOwners[deckId] = ownerId;
 
     // Events from a player that has since been replaced are ignored.
     const isCurrent = () => this.players[deckId] === player;
@@ -267,7 +302,7 @@ class PlayerManager {
           this.updateDeckState(deckId, {
             isReady: false,
             status: 'ERROR',
-            errorMessage: 'A BROWSER EXTENSION IS BLOCKING SPOTIFY (UBLOCK ORIGIN / PRIVACY BADGER?). DISABLE IT FOR 127.0.0.1 AND RELOAD.'
+            errorMessage: 'A BROWSER EXTENSION IS BLOCKING SPOTIFY (UBLOCK ORIGIN / PRIVACY BADGER?). DISABLE IT FOR THIS SITE AND RELOAD.'
           });
           return;
         }
@@ -334,20 +369,37 @@ class PlayerManager {
       this.trackPositionLoop(deckId, isPlaying);
     });
 
-    const connecting: Promise<boolean> = player.connect();
-    this.connectPromises[deckId] = connecting;
-    const success = await connecting;
+    player.addListener('autoplay_failed', () => {
+      if (!isCurrent()) return;
+      console.warn(`[Deck ${deckId}] browser blocked autoplay; needs a click on PLAY`);
+    });
+
+    // Spotify's player sometimes neither connects nor reports an error.
+    // Don't leave the deck saying "Connecting…" forever.
+    window.setTimeout(() => {
+      if (isCurrent() && !this.deviceIds[deckId] && this.deckStates[deckId].status === 'CONNECTING') {
+        this.updateDeckState(deckId, {
+          isReady: false,
+          status: 'ERROR',
+          errorMessage: `DECK ${deckId === 'A' ? '1' : '2'} COULDN'T CONNECT TO SPOTIFY AFTER ${CONNECT_TIMEOUT_MS / 1000}s. PRESS RETRY.`
+        });
+      }
+    }, CONNECT_TIMEOUT_MS);
+
+    console.log(`[Deck ${deckId}] connecting player`);
+    const success: boolean = await player.connect();
+    console.log(`[Deck ${deckId}] player.connect() -> ${success}`);
     if (!success && isCurrent()) {
-      console.warn(`[Deck ${deckId}] player.connect() returned false`);
       this.updateDeckState(deckId, {
         errorMessage: 'FAILED TO CONNECT SPOTIFY SDK. CHECK EXTENSIONS / PERMISSIONS.',
         status: 'ERROR'
       });
     }
+    return success;
   }
 
   /**
-   * Dev diagnostic: calls the endpoints the Spotify player checks at login and
+   * Diagnostic: calls the endpoints the Spotify player checks at login and
    * logs Spotify's responses (never the token).
    */
   private async probePlayerAuth(deckId: DeckId): Promise<void> {
@@ -385,6 +437,8 @@ class PlayerManager {
         console.warn(`[Deck ${deckId}] Disconnect error:`, e);
       }
     }
+    if (player || this.sdkFrames[deckId]) console.log(`[Deck ${deckId}] Spotify player disconnected`);
+    this.removeDeckFrame(deckId);
     // A YouTube deck keeps playing; only the Spotify side goes away.
     this.updateDeckState(deckId, this.isYouTubeDeck(deckId)
       ? { deviceId: null }
@@ -493,7 +547,7 @@ class PlayerManager {
   /** Waits for this deck's own browser player to register with Spotify. */
   private async waitForDevice(deckId: DeckId): Promise<string | null> {
     const start = Date.now();
-    while (!this.deviceIds[deckId] && this.players[deckId] && Date.now() - start < DEVICE_WAIT_MS) {
+    while (!this.deviceIds[deckId] && this.connectPromises[deckId] && Date.now() - start < DEVICE_WAIT_MS) {
       await new Promise(r => setTimeout(r, 100));
     }
     return this.deviceIds[deckId];
@@ -542,7 +596,9 @@ class PlayerManager {
         throw new Error(`DECK_${deckLabel(deckId)} IS NOT LINKED TO SPOTIFY.`);
       }
 
+      console.log(`[Deck ${deckId}] asking Spotify to play ${trackUri} at ${Math.round(positionMs / 1000)}s on device ${deviceId}`);
       await triggerPlayback(token, deviceId, trackUri, positionMs);
+      console.log(`[Deck ${deckId}] Spotify accepted the play request`);
       this.updateDeckState(deckId, { isPlaying: true, status: 'PLAYING', errorMessage: null });
     } catch (err: any) {
       console.error(`[Deck ${deckId}] Playback execution error:`, err);
@@ -596,6 +652,7 @@ class PlayerManager {
    */
   public async togglePlay(deckId: DeckId): Promise<void> {
     const state = this.deckStates[deckId];
+    console.log(`[Deck ${deckId}] ${state.isPlaying ? 'PAUSE' : 'PLAY'} pressed (status ${state.status}, ${state.currentTrack ? `track "${state.currentTrack.name}"` : 'no track'}, device ${this.deviceIds[deckId] ?? 'none'})`);
 
     if (this.isYouTubeDeck(deckId)) {
       // Called straight from the click so the browser allows sound.

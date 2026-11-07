@@ -11,8 +11,9 @@ import {
   getValidToken,
   clearStoredToken,
   fetchUserProfile,
+  SpotifyRequestError,
 } from './services/spotifyAuth';
-import { Track, DeckState, CrossfadeCurve } from './types';
+import { Track, DeckState, CrossfadeCurve, SpotifyUser } from './types';
 
 export const App: React.FC = () => {
   const [deckAState, setDeckAState] = useState<DeckState>(playerManager.getDeckState('A'));
@@ -48,17 +49,30 @@ export const App: React.FC = () => {
   // Initialize and check tokens on startup
   const initDeckAuth = useCallback(async (deckId: 'A' | 'B') => {
     const token = await getValidToken(deckId);
+    console.log(`[Deck ${deckId}] startup: ${token ? 'has a saved Spotify login' : 'no Spotify login saved'}`);
     if (!token) return;
     // Mark the deck linked right away; the profile request can take seconds.
     playerManager.updateDeckState(deckId, { token });
 
     try {
-      const user = await fetchUserProfile(token);
-      const prevUser = playerManager.getDeckState(deckId).user;
-      playerManager.updateDeckState(deckId, {
-        token,
-        user: user || prevUser || { id: `deck-${deckId}-user`, display_name: `DECK_${deckId === 'A' ? '01' : '02'}_USER` }
-      });
+      let user: SpotifyUser | null = null;
+      try {
+        user = await fetchUserProfile(token, deckId);
+      } catch (e) {
+        // Spotify refusing the account outright: the player would fail too, so say why.
+        if (e instanceof SpotifyRequestError && (e.status === 401 || e.status === 403)) {
+          playerManager.disconnectDeck(deckId);
+          playerManager.updateDeckState(deckId, {
+            status: 'ERROR',
+            errorMessage: e.status === 403
+              ? `SPOTIFY REFUSED THIS ACCOUNT ("${e.message}"). ADD IT UNDER USER MANAGEMENT IN YOUR SPOTIFY APP'S DASHBOARD (SETTINGS HAS THE LINK), THEN PRESS RETRY.`
+              : 'THIS SPOTIFY LOGIN IS NO LONGER VALID. CLICK UNLINK, THEN LINK THE ACCOUNT AGAIN.'
+          });
+          return;
+        }
+        // Network trouble or rate limiting: carry on without the name.
+      }
+      if (user) playerManager.updateDeckState(deckId, { user });
 
       // Both decks on one account can't work: Spotify allows one stream per
       // account, so starting one deck would stop the other.
@@ -115,6 +129,19 @@ export const App: React.FC = () => {
       errorMessage: null
     });
     showToast(`DECK_${deckId === 'A' ? '01' : '02'} DISCONNECTED`, 'info');
+  };
+
+  // The deck's Retry button: reconnect a stuck Spotify player (re-checking the
+  // account first), otherwise try playing again.
+  const handleRetry = (deckId: 'A' | 'B') => {
+    if (playerManager.needsSpotifyReconnect(deckId)) {
+      console.log(`[Deck ${deckId}] Retry: reconnecting Spotify`);
+      playerManager.disconnectDeck(deckId);
+      playerManager.updateDeckState(deckId, { errorMessage: null });
+      initDeckAuth(deckId);
+    } else {
+      playerManager.togglePlay(deckId);
+    }
   };
 
   const handleCrossfadeChange = (pos: number) => {
@@ -176,6 +203,7 @@ export const App: React.FC = () => {
               onSeek={(pos) => playerManager.seek('A', pos)}
               onConnect={() => setAuthModalDeck('A')}
               onDisconnect={() => handleDisconnect('A')}
+              onRetry={() => handleRetry('A')}
             />
           </div>
 
@@ -203,6 +231,7 @@ export const App: React.FC = () => {
               onSeek={(pos) => playerManager.seek('B', pos)}
               onConnect={() => setAuthModalDeck('B')}
               onDisconnect={() => handleDisconnect('B')}
+              onRetry={() => handleRetry('B')}
             />
           </div>
         </div>

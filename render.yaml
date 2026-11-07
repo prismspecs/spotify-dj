@@ -12,3 +12,7 @@ services:
       # Render asks for the value at setup; it is never stored in the repo.
       - key: YOUTUBE_API_KEY
         sync: false
+      # Optional: any long random string. Turns on the browser debug log,
+      # readable at /api/log?key=<this value>. Leave unset to keep it off.
+      - key: DEBUG_LOG_KEY
+        sync: false

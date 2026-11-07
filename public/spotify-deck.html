@@ -1,0 +1,22 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Deck player</title>
+  </head>
+  <body>
+    <!--
+      Each deck loads Spotify's player script in its own copy of this page.
+      The script supports one Spotify account per page: a second player on the
+      same page takes over the first one's login, and both decks stall.
+    -->
+    <script>
+      window.spotifyReady = new Promise(function (resolve) {
+        window.onSpotifyWebPlaybackSDKReady = function () {
+          resolve(window.Spotify);
+        };
+      });
+    </script>
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+  </body>
+</html>
