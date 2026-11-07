@@ -53,6 +53,22 @@ async function spotifyGet(url: string, token: string, retries = 2): Promise<any>
   }
 }
 
+/**
+ * Spotify returns long lists in pages (100 songs per playlist page, 50 per
+ * album page). Follows the `next` links and returns every item.
+ */
+async function fetchAllPages(firstPage: any, token: string): Promise<any[]> {
+  const items: any[] = [...(firstPage?.items || [])];
+  let next: string | null = firstPage?.next ?? null;
+  // A 10,000-song playlist is 100 pages; stop there in case `next` never ends.
+  for (let pages = 0; next && pages < 100; pages++) {
+    const page = await spotifyGet(next, token);
+    items.push(...(page.items || []));
+    next = page.next ?? null;
+  }
+  return items;
+}
+
 export function extractPlaylistId(urlOrId: string): string | null {
   const trimmed = urlOrId.trim();
   if (!trimmed) return null;
@@ -131,7 +147,8 @@ export async function fetchPlaylist(token: string, playlistInput: string): Promi
   if (albumId) {
     const data = await spotifyGet(`https://api.spotify.com/v1/albums/${albumId}`, token);
     const albumArt = data.images?.[0]?.url || data.images?.[1]?.url || '';
-    const tracks: Track[] = (data.tracks?.items || []).map((t: any) => ({
+    const albumTracks = await fetchAllPages(data.tracks, token);
+    const tracks: Track[] = albumTracks.map((t: any) => ({
       id: t.id,
       name: t.name,
       artists: t.artists.map((a: any) => a.name),
@@ -187,11 +204,13 @@ export async function fetchPlaylist(token: string, playlistInput: string): Promi
   try {
     const data = await spotifyGet(`https://api.spotify.com/v1/playlists/${playlistId}`, token);
 
+    // The playlist comes with its first page of songs (`items`, or `tracks`
+    // before Spotify's Feb 2026 rename); the rest has to be fetched page by page.
     let rawItems: any[] = [];
     if (Array.isArray(data.items?.items)) {
-      rawItems = data.items.items;
+      rawItems = await fetchAllPages(data.items, token);
     } else if (Array.isArray(data.tracks?.items)) {
-      rawItems = data.tracks.items;
+      rawItems = await fetchAllPages(data.tracks, token);
     } else if (Array.isArray(data.items)) {
       rawItems = data.items;
     }
@@ -199,12 +218,12 @@ export async function fetchPlaylist(token: string, playlistInput: string): Promi
     // If playlist items array was empty or omitted from main object, query items / tracks sub-endpoint
     if (rawItems.length === 0) {
       try {
-        const itemsData = await spotifyGet(`https://api.spotify.com/v1/playlists/${playlistId}/items?limit=50`, token);
-        rawItems = itemsData.items || [];
+        const itemsData = await spotifyGet(`https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100`, token);
+        rawItems = await fetchAllPages(itemsData, token);
       } catch {
         try {
-          const tracksData = await spotifyGet(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=50`, token);
-          rawItems = tracksData.items || [];
+          const tracksData = await spotifyGet(`https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100`, token);
+          rawItems = await fetchAllPages(tracksData, token);
         } catch {
           // fallback failed, use empty list
         }

@@ -6,7 +6,8 @@ import {
   extractAlbumId,
   extractArtistId,
   transferPlayback,
-  triggerPlayback
+  triggerPlayback,
+  fetchPlaylist
 } from '../services/spotifyApi';
 
 describe('spotifyApi utilities', () => {
@@ -133,5 +134,39 @@ describe('spotifyApi utilities', () => {
         triggerPlayback('test_token', 'device_456', 'spotify:track:abc', 0)
       ).rejects.toThrow(/SPOTIFY PREMIUM REQUIRED/i);
     });
+  });
+});
+
+describe('fetchPlaylist paging', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const song = (n: number) => ({ item: { id: `t${n}`, name: `Song ${n}`, artists: [{ name: 'A' }], duration_ms: 1000, uri: `spotify:track:t${n}` } });
+  const page = (from: number, count: number, next: string | null) => ({
+    items: Array.from({ length: count }, (_, i) => song(from + i)),
+    next,
+    total: 321
+  });
+
+  it('loads every song of a playlist longer than one page', async () => {
+    const base = 'https://api.spotify.com/v1/playlists/abc/items';
+    const pages: Record<string, any> = {
+      [`${base}?offset=100&limit=100`]: page(100, 100, `${base}?offset=200&limit=100`),
+      [`${base}?offset=200&limit=100`]: page(200, 100, `${base}?offset=300&limit=100`),
+      [`${base}?offset=300&limit=100`]: page(300, 21, null)
+    };
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      const body = url.endsWith('/playlists/abc')
+        ? { id: 'abc', name: 'Gusifest', images: [], items: page(0, 100, `${base}?offset=100&limit=100`) }
+        : pages[url];
+      if (!body) throw new Error(`unexpected request ${url}`);
+      return { ok: true, status: 200, json: async () => body };
+    }));
+
+    const result = await fetchPlaylist('token', 'https://open.spotify.com/playlist/abc');
+
+    expect(result.tracks).toHaveLength(321);
+    expect(result.tracks[0].id).toBe('t0');
+    expect(result.tracks[320].id).toBe('t320');
+    expect(result.totalTracks).toBe(321);
   });
 });
