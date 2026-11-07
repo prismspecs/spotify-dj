@@ -66,6 +66,26 @@ describe('deck queue', () => {
   });
 });
 
+describe('auto play switch', () => {
+  beforeEach(() => store.clear());
+
+  it('when off, a finished song does not start the next one', async () => {
+    const pm = await freshManager();
+    expect(pm.getDeckState('A').autoPlay).toBe(true);
+    pm.enqueue('A', track('next'));
+    pm.setAutoPlay('A', false);
+    const load = vi.spyOn(pm, 'loadTrack').mockResolvedValue(undefined);
+    pm.onTrackEnded('A');
+    await new Promise((r) => setTimeout(r, 0));
+    expect(load).not.toHaveBeenCalled();
+    expect(pm.getDeckState('A').queue.map((t: Track) => t.id)).toEqual(['next']);
+
+    const reloaded = await freshManager();
+    expect(reloaded.getDeckState('A').autoPlay).toBe(false);
+    expect(reloaded.getDeckState('B').autoPlay).toBe(true);
+  });
+});
+
 describe('loading a song onto a deck', () => {
   beforeEach(() => store.clear());
 

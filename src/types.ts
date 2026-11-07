@@ -39,6 +39,8 @@ export interface DeckState {
   // Songs waiting to play on this deck, in order. When the current song
   // ends, the first one starts automatically.
   queue: Track[];
+  // When on, the next queued song starts by itself as the current one ends.
+  autoPlay: boolean;
 }
 
 export type CrossfadeCurve = 'constant-power' | 'linear' | 'cut';

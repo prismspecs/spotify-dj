@@ -180,8 +180,21 @@ export const Deck: React.FC<DeckProps> = ({
           <span className="text-zinc-300 font-bold">
             Up next{state.queue.length > 0 && <span className="text-zinc-500 font-normal"> ({state.queue.length})</span>}
           </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => playerManager.setAutoPlay(deckId, !state.autoPlay)}
+              role="switch"
+              aria-checked={state.autoPlay}
+              title={state.autoPlay ? 'On: the next queued song starts when this one ends' : 'Off: the deck stops when a song ends; press Next to continue'}
+              className="flex items-center gap-1.5"
+            >
+              <span className={`relative w-7 h-3.5 border ${state.autoPlay ? 'bg-emerald-600 border-emerald-500' : 'bg-zinc-900 border-zinc-700'}`}>
+                <span className={`absolute top-0 w-3 h-full bg-white transition-all ${state.autoPlay ? 'right-0' : 'left-0'}`} />
+              </span>
+              <span className={`text-[10px] font-bold ${state.autoPlay ? 'text-emerald-400' : 'text-zinc-500'}`}>AUTO PLAY</span>
+            </button>
           {state.queue.length > 0 && (
-            <div className="flex items-center gap-3">
+            <>
               <button
                 onClick={() => playerManager.playNext(deckId)}
                 className="flex items-center gap-1 text-zinc-300 hover:text-white"
@@ -193,12 +206,13 @@ export const Deck: React.FC<DeckProps> = ({
               <button onClick={() => playerManager.clearQueue(deckId)} className="text-zinc-600 hover:text-red-400">
                 clear
               </button>
-            </div>
+            </>
           )}
+          </div>
         </div>
         {state.queue.length === 0 ? (
           <p className="text-[10px] text-zinc-600 leading-relaxed">
-            Nothing queued. Press <b className="text-zinc-400">+</b> next to a song's DECK {isA ? '1' : '2'} button; queued songs play one after another.
+            Nothing queued. Press <b className="text-zinc-400">+</b> next to a song's DECK {isA ? '1' : '2'} button. With AUTO PLAY on, queued songs play one after another.
           </p>
         ) : (
           <ol className="max-h-36 overflow-y-auto space-y-0.5">

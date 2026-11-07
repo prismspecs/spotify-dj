@@ -29,6 +29,16 @@ const deckLabel = (deckId: DeckId) => (deckId === 'A' ? '01' : '02');
 // Queues survive a page reload.
 const queueKey = (deckId: DeckId) => `spotify_dj_queue_${deckId.toLowerCase()}`;
 
+const autoPlayKey = (deckId: DeckId) => `spotify_dj_autoplay_${deckId.toLowerCase()}`;
+
+function loadSavedAutoPlay(deckId: DeckId): boolean {
+  try {
+    return localStorage.getItem(autoPlayKey(deckId)) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
 function loadSavedQueue(deckId: DeckId): Track[] {
   try {
     const saved = JSON.parse(localStorage.getItem(queueKey(deckId)) || '[]');
@@ -67,7 +77,8 @@ function initialDeckState(deckId: DeckId): DeckState {
     token: null,
     status: 'IDLE',
     errorMessage: null,
-    queue: loadSavedQueue(deckId)
+    queue: loadSavedQueue(deckId),
+    autoPlay: loadSavedAutoPlay(deckId)
   };
 }
 
@@ -590,6 +601,16 @@ class PlayerManager {
     this.setQueue(deckId, queue);
   }
 
+  public setAutoPlay(deckId: DeckId, on: boolean): void {
+    this.updateDeckState(deckId, { autoPlay: on });
+    console.log(`[Deck ${deckId}] auto play ${on ? 'on' : 'off'}`);
+    try {
+      localStorage.setItem(autoPlayKey(deckId), on ? 'on' : 'off');
+    } catch {
+      // not remembered across reloads; still works now
+    }
+  }
+
   public clearQueue(deckId: DeckId): void {
     this.setQueue(deckId, []);
   }
@@ -629,9 +650,9 @@ class PlayerManager {
 
   /** A song finished on its own: play the next queued one, if any. */
   private onTrackEnded(deckId: DeckId): void {
-    const queue = this.deckStates[deckId].queue;
-    console.log(`[Deck ${deckId}] song ended; ${queue.length} in queue`);
-    if (queue.length === 0) {
+    const { queue, autoPlay } = this.deckStates[deckId];
+    console.log(`[Deck ${deckId}] song ended; ${queue.length} in queue; auto play ${autoPlay ? 'on' : 'off'}`);
+    if (queue.length === 0 || !autoPlay) {
       // Spotify may carry on with its own "autoplay" picks; a deck plays only what was chosen.
       if (!this.isYouTubeDeck(deckId)) void this.players[deckId]?.pause().catch(() => undefined);
       return;
