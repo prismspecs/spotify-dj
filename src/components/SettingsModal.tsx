@@ -90,7 +90,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
               </a>
             </div>
             <p className="text-[11px] text-zinc-500 leading-relaxed">
-              In the dashboard: create an app (tick Web API and Web Playback SDK), add the redirect URI below to it, then copy the app's Client ID here.
+              In the dashboard: create an app (tick Web API and Web Playback SDK), add the redirect URI below to it, then copy the app's Client ID here. One Client ID covers both decks; add your second Spotify account under the app's User Management.
             </p>
             <input
               type="text"
