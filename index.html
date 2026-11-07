@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vinyl.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Spotify DJ Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+      // Global hook for Spotify Web Playback SDK
+      window.__spotifySdkReadyCallbacks = window.__spotifySdkReadyCallbacks || [];
+      window.onSpotifyWebPlaybackSDKReady = function () {
+        console.log('[Spotify SDK] onSpotifyWebPlaybackSDKReady event fired');
+        window.__spotifySdkLoaded = true;
+        if (window.__spotifySdkReadyCallbacks && window.__spotifySdkReadyCallbacks.length) {
+          window.__spotifySdkReadyCallbacks.forEach(function (cb) {
+            try { cb(); } catch (e) { console.warn(e); }
+          });
+          window.__spotifySdkReadyCallbacks = [];
+        }
+      };
+    </script>
+  </head>
+  <body class="bg-[#090a0d] text-slate-200 min-h-screen selection:bg-slate-700 selection:text-white antialiased">
+    <div id="root"></div>
+    <!-- Spotify SDK script placed in body so document.body exists when SDK initializes hidden iframe -->
+    <script src="https://sdk.scdn.co/spotify-player.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

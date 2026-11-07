@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@layer base {
+  *, *::before, *::after {
+    border-radius: 0 !important;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', 'Inter', monospace, system-ui;
+    background-color: #000000;
+    color: #e4e4e7;
+    overflow-x: hidden;
+    letter-spacing: -0.01em;
+  }
+  
+  code, pre, .font-mono, [data-mono] {
+    font-family: 'JetBrains Mono', monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Sharp Brutalist Pro-Audio Console */
+
+/* Modular Rack Panels */
+.rack-panel {
+  background: #09090b;
+  border: 1px solid #27272a;
+}
+
+.rack-subpanel {
+  background: #000000;
+  border: 1px solid #18181b;
+}
+
+/* Mechanical Push Buttons (Roland / Akai / Ableton style) */
+.btn-mech {
+  border-radius: 0 !important;
+  background: #18181b;
+  border: 1px solid #3f3f46;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transition: all 0.08s ease-in-out;
+}
+
+.btn-mech:hover {
+  background: #27272a;
+  border-color: #71717a;
+  color: #ffffff;
+}
+
+.btn-mech:active {
+  background: #09090b;
+  border-color: #52525b;
+  transform: translateY(1px);
+}
+
+/* Crossfader with Sharp Machined Aluminum Block */
+.crossfader-input {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: ew-resize;
+  width: 100%;
+  border-radius: 0 !important;
+}
+
+.crossfader-input::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #000000;
+  border: 1px solid #27272a;
+  border-radius: 0 !important;
+}
+
+.crossfader-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 38px;
+  width: 18px;
+  border-radius: 0 !important;
+  background: #e4e4e7;
+  border: 1px solid #ffffff;
+  box-shadow: inset 0 0 0 1px #000000, 0 2px 6px rgba(0,0,0,0.9);
+  cursor: grab;
+  margin-top: -17px;
+  position: relative;
+}
+
+.crossfader-input::-webkit-slider-thumb:hover {
+  background: #ffffff;
+}
+
+.crossfader-input::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  background: #d4d4d8;
+}
+
+/* Vertical Channel Faders */
+.channel-fader {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  transform: rotate(-90deg);
+  width: 140px;
+  cursor: ns-resize;
+  border-radius: 0 !important;
+}
+
+.channel-fader::-webkit-slider-runnable-track {
+  height: 4px;
+  background: #000000;
+  border: 1px solid #27272a;
+  border-radius: 0 !important;
+}
+
+.channel-fader::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 30px;
+  width: 14px;
+  border-radius: 0 !important;
+  background: #a1a1aa;
+  border: 1px solid #e4e4e7;
+  box-shadow: inset 0 0 0 1px #000000;
+  cursor: grab;
+  margin-top: -13px;
+}
+
+.channel-fader::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  background: #ffffff;
+}
+
+/* Sharp Technical Table */
+.tech-table th {
+  border-bottom: 1px solid #27272a;
+  background: #000000;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #71717a;
+  padding: 8px 12px;
+}
+
+.tech-table td {
+  border-bottom: 1px solid #18181b;
+  padding: 8px 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+
+.tech-table tr:hover td {
+  background: #121215;
+}
