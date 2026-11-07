@@ -52,4 +52,6 @@ export interface PlaylistInfo {
   image?: string;
   totalTracks: number;
   tracks: Track[];
+  // The link it was loaded from, so the saved copy can be refreshed.
+  sourceLink?: string;
 }

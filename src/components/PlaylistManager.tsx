@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Search, Music, ArrowRight, Loader2, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Search, Music, ArrowRight, Loader2, X, RefreshCw } from 'lucide-react';
 import { Track, PlaylistInfo } from '../types';
 import { fetchPlaylist, fetchTrackById, extractTrackId, searchTracks, formatDuration } from '../services/spotifyApi';
 import { getValidToken } from '../services/spotifyAuth';
@@ -18,6 +18,13 @@ const NO_PLAYLIST: PlaylistInfo = { id: 'none', name: '', totalTracks: 0, tracks
 function loadSavedPlaylist(): PlaylistInfo {
   const saved = loadSaved<PlaylistInfo>(SAVED_PLAYLIST_KEY, NO_PLAYLIST);
   return saved.id === 'demo-playlist' ? NO_PLAYLIST : saved;
+}
+
+/** Where to reload a saved playlist from (older saves only kept the id). */
+function playlistSource(p: PlaylistInfo): string | null {
+  if (p.sourceLink) return p.sourceLink;
+  if (!p.id || p.id === 'none' || p.name.startsWith('TRACK:')) return null;
+  return p.name.startsWith('ALBUM:') ? `spotify:album:${p.id}` : `spotify:playlist:${p.id}`;
 }
 
 // Saved per browser so the columns survive reloads (e.g. the Spotify login redirect).
@@ -243,9 +250,38 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
     if (trackId) {
       addResults([await fetchTrackById(token, trackId)]);
     } else {
-      setPlaylist(await fetchPlaylist(token, input));
+      const info = await fetchPlaylist(token, input);
+      console.log(`[Crate] loaded "${info.name}": ${info.tracks.length} songs (Spotify says ${info.totalTracks})`);
+      setPlaylist({ ...info, sourceLink: input });
     }
   };
+
+  // Reload the saved playlist from Spotify, so the list matches the real one
+  // (songs added since, or an older copy cut short).
+  const refreshPlaylist = async (quiet = false) => {
+    const source = playlistSource(playlist);
+    if (!source) return;
+    const token = quiet ? (await getValidToken('A')) || (await getValidToken('B')) : await spotifyToken('left');
+    if (!token) return;
+    if (quiet) {
+      try {
+        await loadSpotifyLink(token, source);
+      } catch (e: any) {
+        console.warn(`[Crate] could not refresh the saved playlist: ${e?.message}`);
+      }
+      return;
+    }
+    await run('playlist', 'left', () => loadSpotifyLink(token, source));
+  };
+
+  // Once per page load, as soon as a Spotify login is available.
+  const refreshedOnLoad = useRef(false);
+  useEffect(() => {
+    if (!activeToken || refreshedOnLoad.current) return;
+    refreshedOnLoad.current = true;
+    void refreshPlaylist(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeToken]);
 
   // ---- Left: playlist link
 
@@ -328,6 +364,17 @@ export const PlaylistManager: React.FC<PlaylistManagerProps> = ({
                 <span className="text-xs text-zinc-500 truncate">{playlist.name} · {playlist.tracks.length}</span>
               )}
             </div>
+            {playlistSource(playlist) && (
+              <button
+                onClick={() => refreshPlaylist()}
+                disabled={isBusy}
+                className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-white disabled:opacity-30 flex-shrink-0"
+                title="Reload this playlist from Spotify"
+              >
+                <RefreshCw className={`w-3 h-3 ${busy === 'playlist' ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+            )}
           </div>
           <CrateInput
             value={playlistInput}
