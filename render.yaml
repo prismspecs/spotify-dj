@@ -1,0 +1,14 @@
+# Render Blueprint. In the Render dashboard: New > Blueprint > pick this repo.
+services:
+  - type: web
+    name: spotify-dj
+    runtime: node
+    plan: free # sleeps after 15 min idle; "starter" stays awake
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # Optional free YouTube Data API v3 key for reliable YouTube search.
+      # Render asks for the value at setup; it is never stored in the repo.
+      - key: YOUTUBE_API_KEY
+        sync: false

@@ -59,7 +59,6 @@ function initialDeckState(deckId: DeckId): DeckState {
     user: null,
     deviceId: null,
     token: null,
-    isDemo: false,
     status: 'IDLE',
     errorMessage: null
   };
@@ -81,7 +80,6 @@ class PlayerManager {
   private ytContainers: Partial<Record<DeckId, HTMLDivElement>> = {};
   private ytStates: Record<DeckId, number> = { A: -1, B: -1 };
 
-  private demoAudios: Record<DeckId, HTMLAudioElement | null> = { A: null, B: null };
   private deckStates: Record<DeckId, DeckState> = { A: initialDeckState('A'), B: initialDeckState('B') };
 
   private crossfadePosition = 0.5; // Center default
@@ -99,51 +97,7 @@ class PlayerManager {
   };
 
   constructor() {
-    this.initDemoAudios();
     this.recomputeEffectiveVolumes();
-  }
-
-  private initDemoAudios() {
-    (['A', 'B'] as const).forEach((deckId) => {
-      const audio = new Audio();
-      audio.crossOrigin = 'anonymous';
-      audio.loop = true;
-
-      audio.addEventListener('timeupdate', () => {
-        if (this.deckStates[deckId].isDemo) {
-          this.updateDeckState(deckId, {
-            position_ms: Math.floor(audio.currentTime * 1000),
-            duration_ms: Math.floor((audio.duration || 0) * 1000)
-          });
-        }
-      });
-
-      audio.addEventListener('ended', () => {
-        if (this.deckStates[deckId].isDemo) {
-          this.updateDeckState(deckId, { isPlaying: false, position_ms: 0, status: 'PAUSED' });
-        }
-      });
-
-      audio.addEventListener('play', () => {
-        if (this.deckStates[deckId].isDemo) {
-          this.updateDeckState(deckId, { isPlaying: true, status: 'PLAYING', errorMessage: null });
-        }
-      });
-
-      audio.addEventListener('pause', () => {
-        if (this.deckStates[deckId].isDemo) {
-          this.updateDeckState(deckId, { isPlaying: false, status: 'PAUSED' });
-        }
-      });
-
-      audio.addEventListener('error', (e) => {
-        if (this.deckStates[deckId].isDemo) {
-          console.warn(`Deck ${deckId} demo audio error:`, e);
-        }
-      });
-
-      this.demoAudios[deckId] = audio;
-    });
   }
 
   public subscribe(callback: PlayerStateCallback): () => void {
@@ -229,7 +183,7 @@ class PlayerManager {
     }
     if (existing) this.disconnectDeck(deckId);
 
-    this.updateDeckState(deckId, { isDemo: false, status: 'CONNECTING', errorMessage: null });
+    this.updateDeckState(deckId, { status: 'CONNECTING', errorMessage: null });
     if (import.meta.env.DEV) void this.probePlayerAuth(deckId);
 
     const player = new window.Spotify.Player({
@@ -511,7 +465,6 @@ class PlayerManager {
     this.trackPositionLoop(deckId, false);
     this.updateDeckState(deckId, {
       currentTrack: track,
-      isDemo: false,
       isPlaying: false,
       errorMessage: null,
       position_ms: 0,
@@ -561,7 +514,7 @@ class PlayerManager {
           duration_ms: Math.round(player.getDuration() * 1000)
         });
       }, 250);
-    } else if (isPlaying && !this.deckStates[deckId].isDemo) {
+    } else if (isPlaying) {
       this.positionIntervals[deckId] = window.setInterval(async () => {
         const state = await this.players[deckId]?.getCurrentState();
         if (state) {
@@ -572,31 +525,6 @@ class PlayerManager {
         }
       }, 500);
     }
-  }
-
-  /**
-   * Sets Demo mode for a deck with a sample track
-   */
-  public setDemoMode(deckId: DeckId, track: Track): void {
-    if (this.players[deckId]) this.disconnectDeck(deckId);
-
-    const audio = this.demoAudios[deckId];
-    if (audio && track.preview_url) {
-      audio.src = track.preview_url;
-      audio.volume = this.deckStates[deckId].effectiveVolume;
-      audio.load();
-    }
-
-    this.updateDeckState(deckId, {
-      isDemo: true,
-      isReady: true,
-      currentTrack: track,
-      position_ms: 0,
-      duration_ms: track.duration_ms,
-      isPlaying: false,
-      status: 'READY',
-      errorMessage: null
-    });
   }
 
   /**
@@ -631,31 +559,20 @@ class PlayerManager {
     const state = this.deckStates[deckId];
 
     // Don't cut off a playing deck by loading over it by accident.
-    if (state.isPlaying && !state.isDemo) {
+    if (state.isPlaying) {
       throw new Error(`DECK_${deckLabel(deckId)} IS PLAYING. PAUSE IT BEFORE LOADING A NEW TRACK.`);
     }
-    if (state.isDemo) this.demoAudios[deckId]?.pause();
 
     if (track.source === 'youtube') {
       return this.loadYouTubeTrack(deckId, track, autoPlay);
     }
 
-    // Unauthenticated guest user: use demo audio pack
     if (!state.token) {
-      this.setDemoMode(deckId, track);
-      if (autoPlay && this.demoAudios[deckId] && track.preview_url) {
-        try {
-          await this.demoAudios[deckId]?.play();
-        } catch (e) {
-          console.warn('Demo autoPlay blocked:', e);
-        }
-      }
-      return;
+      throw new Error(`DECK_${deckLabel(deckId)} HAS NO SPOTIFY ACCOUNT. LINK ONE, OR PUT A YOUTUBE TRACK ON THIS DECK.`);
     }
 
     this.updateDeckState(deckId, {
       currentTrack: track,
-      isDemo: false,
       isPlaying: false,
       errorMessage: null,
       duration_ms: track.duration_ms,
@@ -679,24 +596,6 @@ class PlayerManager {
    */
   public async togglePlay(deckId: DeckId): Promise<void> {
     const state = this.deckStates[deckId];
-
-    if (state.isDemo) {
-      const audio = this.demoAudios[deckId];
-      if (!audio) return;
-      if (state.isPlaying) {
-        audio.pause();
-      } else {
-        try {
-          await audio.play();
-        } catch (e: any) {
-          console.warn('Playback error:', e);
-          this.updateDeckState(deckId, {
-            errorMessage: e?.message || 'AUTOPLAY BLOCKED. CLICK AGAIN TO PLAY.'
-          });
-        }
-      }
-      return;
-    }
 
     if (this.isYouTubeDeck(deckId)) {
       // Called straight from the click so the browser allows sound.
@@ -750,14 +649,6 @@ class PlayerManager {
    */
   public async seek(deckId: DeckId, positionMs: number): Promise<void> {
     const state = this.deckStates[deckId];
-    if (state.isDemo) {
-      const audio = this.demoAudios[deckId];
-      if (audio) {
-        audio.currentTime = positionMs / 1000;
-        this.updateDeckState(deckId, { position_ms: positionMs });
-      }
-      return;
-    }
 
     if (this.isYouTubeDeck(deckId)) {
       const yt = this.ytPlayers[deckId];
@@ -840,11 +731,6 @@ class PlayerManager {
 
   private applyVolumeToDevice(deckId: DeckId, volume: number) {
     const clamped = Math.max(0, Math.min(1, volume));
-    if (this.deckStates[deckId].isDemo) {
-      const audio = this.demoAudios[deckId];
-      if (audio) audio.volume = clamped;
-      return;
-    }
     if (this.isYouTubeDeck(deckId)) {
       this.ytPlayers[deckId]?.setVolume(Math.round(clamped * 100));
       return;

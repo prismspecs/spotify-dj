@@ -1,5 +1,4 @@
 import express from 'express';
-import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -13,7 +12,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// No CORS: the site and its API share one origin, and other sites
+// shouldn't be able to use this server's YouTube search.
 app.use(express.json());
 
 // Serve static frontend build if present

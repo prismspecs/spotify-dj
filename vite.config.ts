@@ -1,3 +1,4 @@
+import 'dotenv/config'; // lets YOUTUBE_API_KEY in .env reach the dev search endpoint
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';

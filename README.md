@@ -56,7 +56,6 @@ Inspired by industrial audio consoles, modular synthesizers, and hardware mixers
   - Artist Top Tracks: `https://open.spotify.com/artist/...`
 - **Instant Deck Assignment**: Single-click `[DECK_1]` and `[DECK_2]` buttons to load tracks onto either bus.
 - **YouTube Row**: Paste one or more YouTube video links (they pile up into one list) or search YouTube. No account or API key needed; search goes through the local dev server (`server/youtubeSearch.js`) and reads YouTube's results page, so it is unofficial and can break if YouTube changes it.
-- **Built-in Offline Demo Pack**: Includes local sample grooves to test mixing, crossfading, and VU metering instantly without needing Spotify credentials.
 
 ### 4. PKCE OAuth Security & Token Management
 - **Zero Client Secret Exposure**: Uses the OAuth 2.0 Authorization Code Flow with PKCE (Proof Key for Code Exchange).
@@ -120,6 +119,16 @@ While your app is in "Development Mode", Spotify requires you to explicitly allo
 5. Search for a track or paste a playlist into the **Audio Crate**, load songs onto Deck 01 and Deck 02, and start mixing!
 
 ---
+
+## ☁️ Deploy to Render
+
+The repo includes a Render Blueprint (`render.yaml`): one Node web service that builds the site and runs `server.js`, which serves the app and the YouTube search endpoint.
+
+1. On [render.com](https://render.com), choose **New → Blueprint** and pick this repo.
+2. When asked for `YOUTUBE_API_KEY`, paste a free [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) key, or leave it blank. Without a key, search reads YouTube's results page, which YouTube may block from cloud servers.
+3. Add `https://<your-service>.onrender.com/` to your Spotify app's **Redirect URIs**.
+
+The free plan sleeps after 15 minutes without requests, so the first load or search after a quiet spell takes about a minute. Music keeps playing meanwhile; it runs in the browser.
 
 ## 🛠️ Architecture & Under the Hood
 

@@ -56,21 +56,29 @@
   transform: translateY(1px);
 }
 
-/* Crossfader with Sharp Machined Aluminum Block */
+/* Sliders. Each rule has a WebKit (Chrome/Safari) and a Gecko (Firefox)
+   version: browsers drop a whole rule if it contains a pseudo-element they
+   don't know, so the two can't be combined into one selector list. */
+
+/* Crossfader (horizontal) */
 .crossfader-input {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
   cursor: ew-resize;
   width: 100%;
-  border-radius: 0 !important;
+  height: 40px;
 }
 
 .crossfader-input::-webkit-slider-runnable-track {
-  height: 4px;
-  background: #000000;
-  border: 1px solid #27272a;
-  border-radius: 0 !important;
+  height: 8px;
+  background: #3f3f46;
+  border: 1px solid #71717a;
+}
+.crossfader-input::-moz-range-track {
+  height: 8px;
+  background: #3f3f46;
+  border: 1px solid #71717a;
 }
 
 .crossfader-input::-webkit-slider-thumb {
@@ -78,40 +86,42 @@
   appearance: none;
   height: 38px;
   width: 18px;
-  border-radius: 0 !important;
   background: #e4e4e7;
   border: 1px solid #ffffff;
-  box-shadow: inset 0 0 0 1px #000000, 0 2px 6px rgba(0,0,0,0.9);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
   cursor: grab;
-  margin-top: -17px;
-  position: relative;
+  margin-top: -16px;
+}
+.crossfader-input::-moz-range-thumb {
+  height: 38px;
+  width: 18px;
+  background: #e4e4e7;
+  border: 1px solid #ffffff;
+  border-radius: 0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.9);
+  cursor: grab;
 }
 
-.crossfader-input::-webkit-slider-thumb:hover {
-  background: #ffffff;
-}
-
-.crossfader-input::-webkit-slider-thumb:active {
-  cursor: grabbing;
-  background: #d4d4d8;
-}
-
-/* Vertical Channel Faders */
+/* Channel volume faders (vertical: a horizontal slider rotated -90deg) */
 .channel-fader {
   -webkit-appearance: none;
   appearance: none;
   background: transparent;
   transform: rotate(-90deg);
   width: 140px;
+  height: 32px;
   cursor: ns-resize;
-  border-radius: 0 !important;
 }
 
 .channel-fader::-webkit-slider-runnable-track {
-  height: 4px;
-  background: #000000;
-  border: 1px solid #27272a;
-  border-radius: 0 !important;
+  height: 8px;
+  background: #3f3f46;
+  border: 1px solid #71717a;
+}
+.channel-fader::-moz-range-track {
+  height: 8px;
+  background: #3f3f46;
+  border: 1px solid #71717a;
 }
 
 .channel-fader::-webkit-slider-thumb {
@@ -119,17 +129,18 @@
   appearance: none;
   height: 30px;
   width: 14px;
-  border-radius: 0 !important;
-  background: #a1a1aa;
-  border: 1px solid #e4e4e7;
-  box-shadow: inset 0 0 0 1px #000000;
+  background: #d4d4d8;
+  border: 1px solid #ffffff;
   cursor: grab;
-  margin-top: -13px;
+  margin-top: -12px;
 }
-
-.channel-fader::-webkit-slider-thumb:active {
-  cursor: grabbing;
-  background: #ffffff;
+.channel-fader::-moz-range-thumb {
+  height: 30px;
+  width: 14px;
+  background: #d4d4d8;
+  border: 1px solid #ffffff;
+  border-radius: 0;
+  cursor: grab;
 }
 
 /* Sharp Technical Table */

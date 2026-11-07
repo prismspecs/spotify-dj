@@ -8,12 +8,10 @@ import { AuthModal } from './components/AuthModal';
 import { playerManager } from './services/playerManager';
 import {
   handleAuthCallback,
-  getStoredToken,
   getValidToken,
   clearStoredToken,
   fetchUserProfile,
 } from './services/spotifyAuth';
-import { DEMO_TRACKS } from './data/demoTracks';
 import { Track, DeckState, CrossfadeCurve } from './types';
 
 export const App: React.FC = () => {
@@ -83,18 +81,6 @@ export const App: React.FC = () => {
     }
   }, []);
 
-  // Auto-load starter tracks on mount so Play button is immediately active
-  useEffect(() => {
-    const tokenA = getStoredToken('A');
-    const tokenB = getStoredToken('B');
-    if (!tokenA && !playerManager.getDeckState('A').currentTrack) {
-      playerManager.loadTrack('A', DEMO_TRACKS[0], false);
-    }
-    if (!tokenB && !playerManager.getDeckState('B').currentTrack) {
-      playerManager.loadTrack('B', DEMO_TRACKS[1], false);
-    }
-  }, []);
-
   // Startup: finish a Spotify login redirect if there is one, then connect
   // both decks. Runs once; React StrictMode would otherwise run it twice and,
   // during a relink, connect a deck with the old account's token.
@@ -115,12 +101,6 @@ export const App: React.FC = () => {
       await Promise.all([initDeckAuth('A'), initDeckAuth('B')]);
     })();
   }, [initDeckAuth]);
-
-  const handleLoadDemoTracks = () => {
-    playerManager.loadTrack('A', DEMO_TRACKS[0], false);
-    playerManager.loadTrack('B', DEMO_TRACKS[1], false);
-    showToast('INTERNAL DEMO GROOVES LOADED TO BUS 1 & 2', 'info');
-  };
 
   const handleDisconnect = (deckId: 'A' | 'B') => {
     clearStoredToken(deckId);
@@ -181,13 +161,7 @@ export const App: React.FC = () => {
       )}
 
       {/* Top Navigation */}
-      <Navbar
-        deckAState={deckAState}
-        deckBState={deckBState}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        onLoadDemoTracks={handleLoadDemoTracks}
-        isDemoActive={deckAState.isDemo || deckBState.isDemo}
-      />
+      <Navbar onOpenSettings={() => setIsSettingsOpen(true)} />
 
       {/* Main Console Workspace */}
       <main className="flex-1 max-w-7xl mx-auto w-full p-2.5 sm:p-4 space-y-3">
@@ -243,14 +217,6 @@ export const App: React.FC = () => {
           currentTrackB={deckBState.currentTrack}
         />
       </main>
-
-      {/* Precision Footer */}
-      <footer className="border-t border-zinc-900 py-2 px-4 text-center text-[10px] font-mono text-zinc-600 bg-black">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1">
-          <span>// ENGINE: SPOTIFY_WEB_PLAYBACK_SDK_DUAL_THREAD</span>
-          <span>// DSP: CONSTANT_POWER_GAIN_COMPENSATION</span>
-        </div>
-      </footer>
 
       {/* Modals */}
       <SettingsModal

@@ -7,7 +7,7 @@ export interface Track {
   duration_ms: number;
   uri: string;
   preview_url?: string | null;
-  source?: 'spotify' | 'youtube'; // undefined = Spotify (or demo)
+  source?: 'spotify' | 'youtube'; // undefined = Spotify
   youtubeId?: string;
 }
 
@@ -30,7 +30,6 @@ export interface DeckState {
   user: SpotifyUser | null;
   deviceId: string | null;
   token: string | null;
-  isDemo: boolean;
   bpm?: number;
   status?: 'IDLE' | 'CONNECTING' | 'READY' | 'PLAYING' | 'PAUSED' | 'ERROR';
   errorMessage?: string | null;
