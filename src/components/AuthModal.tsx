@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, LogIn, KeyRound, AlertTriangle, ChevronDown } from 'lucide-react';
-import { initiateSpotifyLogin, getStoredClientId, setStoredToken } from '../services/spotifyAuth';
+import { initiateSpotifyLogin, getStoredClientId, getStoredToken, setStoredToken } from '../services/spotifyAuth';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -26,6 +26,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const deckNum = isA ? '01' : '02';
   const accentText = isA ? 'text-cyan-400' : 'text-amber-400';
   const clientId = getStoredClientId();
+  const otherDeckNum = isA ? '02' : '01';
+  // The other deck is linked, so the browser is signed in to Spotify as that
+  // account. Sign out first so Spotify asks which account to use.
+  const otherDeckLinked = !!getStoredToken(isA ? 'B' : 'A');
 
   const handleOAuthLogin = async () => {
     setAuthError(null);
@@ -35,7 +39,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }
 
     try {
-      await initiateSpotifyLogin(deckId);
+      await initiateSpotifyLogin(deckId, otherDeckLinked);
     } catch (e: any) {
       setAuthError(e?.message || 'LOGIN INITIATION FAILED');
     }
@@ -72,10 +76,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <p className="text-zinc-400 leading-relaxed text-[11px]">
             LINK DECK_{deckNum} TO AN INDEPENDENT SPOTIFY ACCOUNT. DECK_01 AND DECK_02 REQUIRE SEPARATE ACCOUNTS FOR CONCURRENT DUAL-STREAMING.
           </p>
-          {!isA && (
-            <p className="text-amber-400 leading-relaxed text-[11px]">
-              SPOTIFY WILL SHOW THE ACCOUNT ALREADY LOGGED IN (DECK_01'S). CLICK "NOT YOU?" ON SPOTIFY'S PAGE AND LOG IN WITH THE SECOND ACCOUNT.
-            </p>
+          {otherDeckLinked && (
+            <div className="p-2.5 bg-amber-950/30 border border-amber-900 text-amber-300 leading-relaxed text-[11px] space-y-1.5">
+              <p>
+                DECK_{otherDeckNum} IS ALREADY LINKED. THIS FIRST SIGNS THIS BROWSER OUT OF SPOTIFY (INCLUDING THE SPOTIFY WEB PLAYER), SO YOU CAN LOG IN WITH YOUR SECOND ACCOUNT. DECK_{otherDeckNum} STAYS CONNECTED.
+              </p>
+              <p className="text-amber-500/80">
+                THE SECOND ACCOUNT NEEDS PREMIUM AND MUST BE ADDED UNDER USER MANAGEMENT IN YOUR SPOTIFY APP.
+              </p>
+            </div>
           )}
 
           {authError && (
@@ -93,7 +102,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-2 uppercase active:translate-y-[1px]"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span>LINK_SPOTIFY_ACCOUNT_FOR_DECK_{deckNum}</span>
+                <span>{otherDeckLinked ? 'LOG IN WITH A SECOND SPOTIFY ACCOUNT' : `LINK SPOTIFY ACCOUNT FOR DECK_${deckNum}`}</span>
               </button>
             ) : (
               <div className="p-2.5 bg-black border border-zinc-800 flex items-center justify-between gap-2">

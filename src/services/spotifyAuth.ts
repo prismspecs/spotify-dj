@@ -172,7 +172,13 @@ export function getAppRedirectUri(): string {
   return origin + window.location.pathname;
 }
 
-export async function initiateSpotifyLogin(deckId: 'A' | 'B', customClientId?: string): Promise<void> {
+/**
+ * Sends the browser to Spotify's login for one deck.
+ * switchAccount: sign the browser out of Spotify first, so the login page asks
+ * for an account instead of reusing the one already signed in (which belongs
+ * to the other deck). The other deck's saved login is not affected.
+ */
+export async function initiateSpotifyLogin(deckId: 'A' | 'B', switchAccount = false, customClientId?: string): Promise<void> {
   const clientId = (customClientId || getStoredClientId()).trim();
   if (!clientId) {
     throw new Error('Please configure your Spotify Client ID in Settings first.');
@@ -202,7 +208,11 @@ export async function initiateSpotifyLogin(deckId: 'A' | 'B', customClientId?: s
     show_dialog: 'true'
   });
 
-  window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  const authorizeUrl = `https://accounts.spotify.com/authorize?${params.toString()}`;
+  // Spotify's logout forwards to `continue` (accounts.spotify.com pages only).
+  window.location.href = switchAccount
+    ? `https://accounts.spotify.com/logout?continue=${encodeURIComponent(authorizeUrl)}`
+    : authorizeUrl;
 }
 
 export async function handleAuthCallback(): Promise<{ deckId: 'A' | 'B'; token: string } | null> {
