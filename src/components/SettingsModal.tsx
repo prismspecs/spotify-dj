@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { X, Key, Shield, Check, Copy, AlertTriangle, ChevronDown } from 'lucide-react';
+import { X, Key, Shield, Check, Copy, AlertTriangle, ChevronDown, ExternalLink } from 'lucide-react';
+
+const SPOTIFY_DASHBOARD_URL = 'https://developer.spotify.com/dashboard';
 import { getStoredClientId, setStoredClientId, getStoredToken, setStoredToken, getAppRedirectUri } from '../services/spotifyAuth';
 
 interface SettingsModalProps {
@@ -18,6 +20,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
   if (!isOpen) return null;
 
   const currentRedirectUri = getAppRedirectUri();
+  const isLocal = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
 
   const handleSave = () => {
     setStoredClientId(clientId);
@@ -72,9 +75,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
 
           {/* Spotify Client ID */}
           <div className="space-y-1">
-            <label className="block text-[11px] text-zinc-300 uppercase font-bold">
-              SPOTIFY_CLIENT_ID
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] text-zinc-300 uppercase font-bold">
+                SPOTIFY_CLIENT_ID
+              </label>
+              <a
+                href={SPOTIFY_DASHBOARD_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-[10px] text-emerald-400 hover:text-emerald-300 font-bold"
+              >
+                <span>OPEN SPOTIFY DASHBOARD</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              In the dashboard: create an app (tick Web API and Web Playback SDK), add the redirect URI below to it, then copy the app's Client ID here.
+            </p>
             <input
               type="text"
               value={clientId}
@@ -87,7 +104,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
           {/* Redirect URI Box */}
           <div className="space-y-1 bg-black p-2.5 border border-zinc-800">
             <div className="flex items-center justify-between text-[10px] text-zinc-400">
-              <span className="uppercase font-bold">REDIRECT_URI (127.0.0.1 REQUIRED):</span>
+              <span className="uppercase font-bold">REDIRECT_URI (ADD TO YOUR SPOTIFY APP):</span>
               <button
                 onClick={copyRedirectUri}
                 className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 font-bold"
@@ -99,10 +116,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
             <code className="block text-[11px] text-zinc-200 bg-zinc-900 px-2 py-1 border border-zinc-800 select-all">
               {currentRedirectUri}
             </code>
-            <p className="text-[10px] text-amber-500 flex items-center gap-1 pt-0.5">
-              <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-              <span>Do not enter localhost. Spotify enforces 127.0.0.1 loopback literal.</span>
-            </p>
+            {isLocal && (
+              <p className="text-[10px] text-amber-500 flex items-center gap-1 pt-0.5">
+                <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                <span>Running locally: use this 127.0.0.1 address, not localhost. Spotify rejects localhost.</span>
+              </p>
+            )}
           </div>
 
           {/* Manual Token Overrides */}
