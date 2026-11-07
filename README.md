@@ -1,10 +1,10 @@
-# Spotify Dual DJ Console 🎛️
+# Spotify Dual DJ Console
 
 A brutalist, zero-radius dual-deck DJ web application engineered to bypass Spotify's single-stream restriction by running **two independent Spotify accounts side-by-side on one screen** with a real-time DJ crossfader, channel faders, VU meters, and a shared playlist crate. Either deck can also play **YouTube**, so you can mix Spotify against YouTube with a single Spotify account.
 
 ---
 
-## 🎯 The Problem: Why Two Spotify Accounts?
+## The Problem: Why Two Spotify Accounts?
 
 Spotify strictly enforces a **1-stream-at-a-time limit** per user account:
 - If you start playing Song B while Song A is playing on the same account, Spotify immediately cuts audio to Song A or steals playback to the new device.
@@ -20,7 +20,7 @@ This application runs **two isolated Spotify Web Playback SDK instances** simult
 
 ---
 
-## 🎚️ Hardware Aesthetic & Design Philosophy
+## Hardware Aesthetic & Design Philosophy
 
 Inspired by industrial audio consoles, modular synthesizers, and hardware mixers (Teenage Engineering, Eurorack, Allen & Heath):
 - **Zero Rounded Corners**: Strictly sharp hardware edges (`border-radius: 0`).
@@ -30,7 +30,7 @@ Inspired by industrial audio consoles, modular synthesizers, and hardware mixers
 
 ---
 
-## ✨ Features
+## Features
 
 ### 1. Dual Independent Decks (Deck 01 & Deck 02)
 - **Real-Time Waveform Beatgrid**: Live position tracking, interactive click-to-seek, and elapsed/remaining monospace timecodes (`0:00` / `-3:45`).
@@ -64,7 +64,7 @@ Inspired by industrial audio consoles, modular synthesizers, and hardware mixers
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Install & Launch
 
@@ -82,13 +82,13 @@ npm run dev
 
 Open **[http://localhost:5173/](http://localhost:5173/)** in your browser.
 
-> ⚠️ **IMPORTANT**: The app runs on `localhost` because YouTube refuses to play embeds on an IP-address page. Spotify only accepts the loopback IP `http://127.0.0.1:5173/` as its login redirect, so that stays the Redirect URI in your Spotify dashboard; the app forwards Spotify's redirect back to `localhost` automatically.
+> **IMPORTANT**: The app runs on `localhost` because YouTube refuses to play embeds on an IP-address page. Spotify only accepts the loopback IP `http://127.0.0.1:5173/` as its login redirect, so that stays the Redirect URI in your Spotify dashboard; the app forwards Spotify's redirect back to `localhost` automatically.
 >
 > Ad/tracker blockers (uBlock Origin, Privacy Badger) block Spotify's player. Disable them for `localhost`.
 
 ---
 
-## ⚙️ Spotify Developer Setup (For Live Streaming)
+## Spotify Developer Setup (For Live Streaming)
 
 To stream full audio tracks from Spotify:
 
@@ -106,7 +106,7 @@ To stream full audio tracks from Spotify:
 
 ### Step 3: Whitelist the Second Account (User Management)
 While your app is in "Development Mode", Spotify requires you to explicitly allow any account that connects:
-1. In your app dashboard, go to **Settings** ➔ **User Management**.
+1. In your app dashboard, go to **Settings > User Management**.
 2. Click **Add User**.
 3. Enter your friend's (or second account's) **Name** and their **Spotify Account Email**.
 4. Click **Save**.
@@ -120,17 +120,17 @@ While your app is in "Development Mode", Spotify requires you to explicitly allo
 
 ---
 
-## ☁️ Deploy to Render
+## Deploy to Render
 
 The repo includes a Render Blueprint (`render.yaml`): one Node web service that builds the site and runs `server.js`, which serves the app and the YouTube search endpoint.
 
-1. On [render.com](https://render.com), choose **New → Blueprint** and pick this repo.
+1. On [render.com](https://render.com), choose **New > Blueprint** and pick this repo.
 2. When asked for `YOUTUBE_API_KEY`, paste a free [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) key, or leave it blank. Without a key, search reads YouTube's results page, which YouTube may block from cloud servers.
 3. Add `https://<your-service>.onrender.com/` to your Spotify app's **Redirect URIs**.
 
 The free plan sleeps after 15 minutes without requests, so the first load or search after a quiet spell takes about a minute. Music keeps playing meanwhile; it runs in the browser.
 
-## 🛠️ Architecture & Under the Hood
+## Architecture & Under the Hood
 
 ```
 ┌────────────────────────────────────────────────────────┐
@@ -167,7 +167,7 @@ The free plan sleeps after 15 minutes without requests, so the first load or sea
 
 ---
 
-## 🧪 Testing & Verification
+## Testing & Verification
 
 Run the test suite:
 
@@ -183,6 +183,6 @@ npm run build
 
 ---
 
-## 📄 License
+## License
 
 MIT License. Designed for DJs, music enthusiasts, and pair-programming sessions.
